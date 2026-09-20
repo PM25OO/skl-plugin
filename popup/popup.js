@@ -1,0 +1,140 @@
+(function initializePopup() {
+  "use strict";
+
+  const elements = {
+    enabled: document.querySelector("#enabled"),
+    summary: document.querySelector("#summary"),
+    locations: document.querySelector("#locations"),
+    form: document.querySelector("#location-form"),
+    message: document.querySelector("#message")
+  };
+  let state = SklConfig.normalizeState(null);
+
+  function createId() {
+    return crypto.randomUUID?.() ?? `location-${Date.now()}`;
+  }
+
+  async function save(nextState, message) {
+    state = SklConfig.normalizeState(nextState);
+    await chrome.storage.local.set(state);
+    render();
+    showMessage(message);
+  }
+
+  function showMessage(text, isError = false) {
+    elements.message.textContent = text;
+    elements.message.classList.toggle("error", isError);
+  }
+
+  function render() {
+    const active = state.locations.find(
+      (location) => location.id === state.activeLocationId
+    );
+    elements.enabled.checked = state.enabled;
+    elements.enabled.disabled = state.locations.length === 0;
+    elements.summary.textContent = active
+      ? `${state.enabled ? "已启用" : "未启用"} · ${active.name} · ${active.latitude.toFixed(6)}, ${active.longitude.toFixed(6)}`
+      : "尚未登记坐标";
+    elements.locations.replaceChildren();
+
+    if (state.locations.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "添加一个 WGS-84 坐标后即可启用";
+      elements.locations.append(empty);
+      return;
+    }
+
+    for (const location of state.locations) {
+      const card = document.createElement("div");
+      card.className = "location-card";
+      card.classList.toggle("active", location.id === state.activeLocationId);
+
+      const choice = document.createElement("label");
+      choice.className = "location-choice";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "active-location";
+      radio.checked = location.id === state.activeLocationId;
+      radio.addEventListener("change", () => {
+        void save({ ...state, activeLocationId: location.id }, "已切换位置");
+      });
+
+      const text = document.createElement("span");
+      text.className = "location-text";
+      const name = document.createElement("span");
+      name.className = "location-name";
+      name.textContent = location.name;
+      const coordinates = document.createElement("span");
+      coordinates.className = "location-coordinates";
+      coordinates.textContent = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)} · ±${location.accuracy}m`;
+      text.append(name, coordinates);
+      choice.append(radio, text);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "delete-button";
+      remove.textContent = "删除";
+      remove.setAttribute("aria-label", `删除位置 ${location.name}`);
+      remove.addEventListener("click", () => {
+        const locations = state.locations.filter(
+          (candidate) => candidate.id !== location.id
+        );
+        const activeLocationId =
+          state.activeLocationId === location.id
+            ? locations[0]?.id ?? null
+            : state.activeLocationId;
+        void save(
+          { ...state, locations, activeLocationId },
+          `已删除 ${location.name}`
+        );
+      });
+
+      card.append(choice, remove);
+      elements.locations.append(card);
+    }
+  }
+
+  elements.enabled.addEventListener("change", () => {
+    void save({ ...state, enabled: elements.enabled.checked }, "设置已保存");
+  });
+
+  elements.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(elements.form);
+    const location = SklConfig.normalizeLocation({
+      id: createId(),
+      name: formData.get("name"),
+      latitude: formData.get("latitude"),
+      longitude: formData.get("longitude"),
+      accuracy: formData.get("accuracy"),
+      createdAt: new Date().toISOString()
+    });
+
+    if (!location) {
+      showMessage("请检查名称、经纬度与精度半径", true);
+      return;
+    }
+
+    void save(
+      {
+        ...state,
+        locations: [...state.locations, location],
+        activeLocationId: state.activeLocationId ?? location.id
+      },
+      `已保存 ${location.name}`
+    );
+    elements.form.reset();
+    document.querySelector("#accuracy").value = "20";
+  });
+
+  async function start() {
+    const stored = await chrome.storage.local.get();
+    state = SklConfig.normalizeState(stored);
+    render();
+  }
+
+  void start().catch((error) => {
+    showMessage(`读取设置失败：${error.message}`, true);
+  });
+})();

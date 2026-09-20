@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SKL 坐标助手</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">SKL PLUGIN</p>
+          <h1>坐标助手</h1>
+        </div>
+        <label class="switch" title="启用预登记坐标">
+          <input id="enabled" type="checkbox" />
+          <span aria-hidden="true"></span>
+        </label>
+      </header>
+
+      <p id="summary" class="summary">尚未登记坐标</p>
+      <section aria-labelledby="locations-title">
+        <div class="section-heading">
+          <h2 id="locations-title">预登记位置</h2>
+          <span class="crs">WGS-84</span>
+        </div>
+        <div id="locations" class="locations"></div>
+      </section>
+
+      <details>
+        <summary>添加位置</summary>
+        <form id="location-form">
+          <label>
+            名称
+            <input id="name" name="name" required maxlength="40" placeholder="例如：教室 A" />
+          </label>
+          <div class="coordinate-row">
+            <label>
+              纬度
+              <input id="latitude" name="latitude" required type="number" min="-90" max="90" step="any" placeholder="30.xxxxxx" />
+            </label>
+            <label>
+              经度
+              <input id="longitude" name="longitude" required type="number" min="-180" max="180" step="any" placeholder="120.xxxxxx" />
+            </label>
+          </div>
+          <label>
+            精度半径（米）
+            <input id="accuracy" name="accuracy" required type="number" min="1" step="1" value="20" />
+          </label>
+          <button type="submit">保存位置</button>
+        </form>
+      </details>
+
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+      <footer>更改后刷新签到页面，确保页面重新读取位置。</footer>
+    </main>
+    <script src="../src/shared.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

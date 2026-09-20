@@ -1,0 +1,14 @@
+{
+  "name": "skl-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension for managing preset WGS-84 location profiles on SKL.",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node tests/shared.test.cjs",
+    "verify": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
