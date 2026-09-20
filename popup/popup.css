@@ -17,6 +17,15 @@ body {
   margin: 0;
 }
 
+body.embedded {
+  width: 100%;
+  min-height: 0;
+}
+
+body.embedded main {
+  padding: 16px;
+}
+
 main {
   padding: 20px;
 }

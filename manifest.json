@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SKL 坐标助手",
   "description": "为 SKL 签到页管理预登记坐标，并按需改写签到码。",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "permissions": [
     "storage",
     "downloads"
@@ -17,6 +17,16 @@
   "background": {
     "service_worker": "src/background.js"
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup/popup.html"
+      ],
+      "matches": [
+        "https://skl.hdu.edu.cn/*"
+      ]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [
@@ -34,7 +44,8 @@
       ],
       "js": [
         "src/shared.js",
-        "src/content.js"
+        "src/content.js",
+        "src/panel.js"
       ],
       "css": [
         "src/content.css"

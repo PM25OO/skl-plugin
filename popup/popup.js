@@ -1,6 +1,10 @@
 (function initializePopup() {
   "use strict";
 
+  if (new URLSearchParams(window.location.search).get("embedded") === "1") {
+    document.body.classList.add("embedded");
+  }
+
   const elements = {
     enabled: document.querySelector("#enabled"),
     summary: document.querySelector("#summary"),

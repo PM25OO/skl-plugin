@@ -28,4 +28,18 @@ if (manifest.manifest_version !== 3) {
 if (!manifest.content_scripts?.some((entry) => entry.world === "MAIN")) {
   throw new Error("manifest.json must declare the main-world provider");
 }
+if (
+  !manifest.content_scripts?.some((entry) =>
+    entry.js?.includes("src/panel.js")
+  )
+) {
+  throw new Error("manifest.json must declare the floating configuration panel");
+}
+if (
+  !manifest.web_accessible_resources?.some((entry) =>
+    entry.resources?.includes("popup/popup.html")
+  )
+) {
+  throw new Error("popup/popup.html must be web accessible to the target page");
+}
 console.log("manifest ok");

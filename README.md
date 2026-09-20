@@ -13,6 +13,8 @@
 5. 点击扩展图标，登记 WGS-84 纬度、经度并启用；如需改写请求，可另外填写四位签到码并启用该开关。
 6. 重新加载 SKL 签到页面。
 
+进入 `#/sign/in` 后，配置窗口会自动显示在页面右上方。拖动绿色标题栏可移动窗口，点击右上角按钮可收缩为仅显示当前地点与签到码改写状态的简略模式；位置和收缩状态会自动记忆。扩展图标中的 Popup 仍作为备用入口保留。
+
 ## 开发
 
 项目没有运行时第三方依赖，可直接加载源码目录。Node.js 仅用于静态检查和测试：
@@ -26,6 +28,7 @@ npm run verify
 - `src/main-world.js` 在页面脚本运行前安装 Geolocation 适配层，并拦截 `fetch` 与 `XMLHttpRequest`。
 - 请求改写仅作用于 `/api/ali-nvc/captcha-verify` URL 中已经存在的 `code` 参数。
 - `src/content.js` 从 `chrome.storage.local` 读取设置、桥接到页面主执行环境，并在“当前位置”旁显示地点名称。
+- `src/panel.js` 在签到页面创建与站点样式隔离的浮动配置窗口，并负责拖动、收缩和状态记忆。
 - `src/background.js` 在位置变化后自动覆盖导出 `Downloads/skl-plugin/config.json`。
 - Popup 可以导入手工编辑后的配置；成功导入会再次导出规范化版本。
 - `popup/` 提供位置的新增、删除、切换和启停界面。
