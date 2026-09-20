@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "SKL 坐标助手",
-  "description": "为 SKL 签到页管理并提供预登记的 WGS-84 坐标。",
-  "version": "0.1.0",
+  "description": "为 SKL 签到页管理预登记坐标，并按需改写签到码。",
+  "version": "0.2.0",
   "permissions": [
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
     "https://skl.hdu.edu.cn/*"
@@ -12,6 +13,9 @@
   "action": {
     "default_title": "SKL 坐标助手",
     "default_popup": "popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background.js"
   },
   "content_scripts": [
     {
@@ -31,6 +35,9 @@
       "js": [
         "src/shared.js",
         "src/content.js"
+      ],
+      "css": [
+        "src/content.css"
       ],
       "run_at": "document_start",
       "world": "ISOLATED"

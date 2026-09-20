@@ -20,6 +20,31 @@
       </header>
 
       <p id="summary" class="summary">尚未登记坐标</p>
+      <section class="code-section" aria-labelledby="code-title">
+        <div class="section-heading">
+          <h2 id="code-title">签到码改写</h2>
+          <label class="switch switch-small" title="拦截请求并改写 code 字段">
+            <input id="code-enabled" type="checkbox" />
+            <span aria-hidden="true"></span>
+          </label>
+        </div>
+        <form id="code-form" class="code-form">
+          <input
+            id="code-override"
+            name="code"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            maxlength="4"
+            pattern="[0-9]{4}"
+            placeholder="4 位签到码"
+            aria-label="用于改写请求的四位签到码"
+          />
+          <button type="submit">保存</button>
+        </form>
+        <p class="hint">仅改写签到验证接口 URL 中的 <code>code</code> 参数。</p>
+      </section>
+
       <section aria-labelledby="locations-title">
         <div class="section-heading">
           <h2 id="locations-title">预登记位置</h2>
@@ -52,6 +77,19 @@
           <button type="submit">保存位置</button>
         </form>
       </details>
+
+      <section class="config-section" aria-labelledby="config-title">
+        <div class="section-heading">
+          <h2 id="config-title">配置文件</h2>
+          <label class="import-button">
+            导入
+            <input id="config-import" type="file" accept="application/json,.json" />
+          </label>
+        </div>
+        <p class="hint">
+          位置变更后自动覆盖导出到 <code>Downloads/skl-plugin/config.json</code>。
+        </p>
+      </section>
 
       <p id="message" class="message" role="status" aria-live="polite"></p>
       <footer>更改后刷新签到页面，确保页面重新读取位置。</footer>

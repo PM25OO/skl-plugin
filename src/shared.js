@@ -5,7 +5,9 @@
     schemaVersion: 1,
     enabled: false,
     activeLocationId: null,
-    locations: []
+    locations: [],
+    codeOverrideEnabled: false,
+    codeOverride: ""
   });
 
   function isFiniteNumber(value) {
@@ -62,12 +64,18 @@
     )
       ? input.activeLocationId
       : locations[0]?.id ?? null;
+    const codeOverride =
+      typeof input.codeOverride === "string" ? input.codeOverride.trim() : "";
+    const validCodeOverride = /^\d{4}$/.test(codeOverride);
 
     return {
       schemaVersion: 1,
       enabled: Boolean(input.enabled) && activeLocationId !== null,
       activeLocationId,
-      locations
+      locations,
+      codeOverrideEnabled:
+        Boolean(input.codeOverrideEnabled) && validCodeOverride,
+      codeOverride: validCodeOverride ? codeOverride : ""
     };
   }
 
@@ -82,11 +90,25 @@
       enabled: state.enabled && Boolean(location),
       location: location
         ? {
+            name: location.name,
             latitude: location.latitude,
             longitude: location.longitude,
             accuracy: location.accuracy
           }
-        : null
+        : null,
+      codeOverrideEnabled: state.codeOverrideEnabled,
+      codeOverride: state.codeOverrideEnabled ? state.codeOverride : null
+    };
+  }
+
+  function exportedConfiguration(value, exportedAt = new Date().toISOString()) {
+    const state = normalizeState(value);
+    return {
+      schemaVersion: state.schemaVersion,
+      enabled: state.enabled,
+      activeLocationId: state.activeLocationId,
+      locations: state.locations,
+      exportedAt
     };
   }
 
@@ -94,7 +116,8 @@
     DEFAULT_STATE,
     normalizeLocation,
     normalizeState,
-    activeConfiguration
+    activeConfiguration,
+    exportedConfiguration
   });
 
   root.SklConfig = api;

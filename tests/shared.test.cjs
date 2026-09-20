@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   activeConfiguration,
+  exportedConfiguration,
   normalizeLocation,
   normalizeState
 } = require("../src/shared.js");
@@ -40,7 +41,9 @@ test("disables the provider when no active location exists", () => {
   assert.deepEqual(activeConfiguration(state), {
     schemaVersion: 1,
     enabled: false,
-    location: null
+    location: null,
+    codeOverrideEnabled: false,
+    codeOverride: null
   });
 });
 
@@ -48,6 +51,8 @@ test("builds the active page configuration", () => {
   const configuration = activeConfiguration({
     enabled: true,
     activeLocationId: "room-a",
+    codeOverrideEnabled: true,
+    codeOverride: "1234",
     locations: [
       {
         id: "room-a",
@@ -63,9 +68,37 @@ test("builds the active page configuration", () => {
     schemaVersion: 1,
     enabled: true,
     location: {
+      name: "Room A",
       latitude: 30.1,
       longitude: 120.2,
       accuracy: 15
-    }
+    },
+    codeOverrideEnabled: true,
+    codeOverride: "1234"
   });
+});
+
+test("disables an invalid code override", () => {
+  const state = normalizeState({
+    codeOverrideEnabled: true,
+    codeOverride: "12ab"
+  });
+
+  assert.equal(state.codeOverrideEnabled, false);
+  assert.equal(state.codeOverride, "");
+});
+
+test("exports location configuration without the transient code", () => {
+  const configuration = exportedConfiguration(
+    {
+      codeOverrideEnabled: true,
+      codeOverride: "1234",
+      locations: []
+    },
+    "2026-09-20T00:00:00.000Z"
+  );
+
+  assert.equal(configuration.exportedAt, "2026-09-20T00:00:00.000Z");
+  assert.equal(Object.hasOwn(configuration, "codeOverride"), false);
+  assert.deepEqual(configuration.locations, []);
 });

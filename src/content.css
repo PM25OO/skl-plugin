@@ -1,0 +1,14 @@
+.skl-plugin-location-name {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 0.4em;
+  padding: 0.15em 0.55em;
+  border: 1px solid rgb(57 153 98 / 28%);
+  border-radius: 999px;
+  background: rgb(57 153 98 / 10%);
+  color: #23824d;
+  font-size: 0.82em;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: middle;
+}

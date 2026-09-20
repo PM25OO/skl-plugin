@@ -10,6 +10,9 @@
     nativeGeolocation
   );
   const nativeClearWatch = nativeGeolocation?.clearWatch?.bind(nativeGeolocation);
+  const nativeFetch = window.fetch?.bind(window);
+  const nativeXhrOpen = window.XMLHttpRequest?.prototype.open;
+  const SIGN_ENDPOINT = "/api/ali-nvc/captcha-verify";
 
   let configuration = null;
   let nextSyntheticWatchId = 1_000_000;
@@ -31,6 +34,35 @@
         Number.isFinite(location.accuracy) &&
         location.accuracy > 0
     );
+  }
+
+  function validCodeConfiguration(value) {
+    return Boolean(
+      value?.schemaVersion === 1 &&
+        value.codeOverrideEnabled &&
+        /^\d{4}$/.test(value.codeOverride)
+    );
+  }
+
+  function rewriteRequestUrl(value) {
+    if (!validCodeConfiguration(configuration)) {
+      return value;
+    }
+
+    try {
+      const url = new URL(String(value), window.location.href);
+      if (
+        url.origin !== window.location.origin ||
+        url.pathname !== SIGN_ENDPOINT ||
+        !url.searchParams.has("code")
+      ) {
+        return value;
+      }
+      url.searchParams.set("code", configuration.codeOverride);
+      return url.href;
+    } catch {
+      return value;
+    }
   }
 
   function syntheticPosition() {
@@ -132,6 +164,32 @@
     configuration = event.detail ?? { enabled: false };
     flushPendingRequests();
   });
+
+  if (nativeFetch) {
+    window.fetch = function interceptedFetch(input, init) {
+      if (input instanceof Request) {
+        const rewrittenUrl = rewriteRequestUrl(input.url);
+        const request =
+          rewrittenUrl === input.url ? input : new Request(rewrittenUrl, input);
+        return nativeFetch(request, init);
+      }
+      return nativeFetch(rewriteRequestUrl(input), init);
+    };
+  }
+
+  if (nativeXhrOpen) {
+    window.XMLHttpRequest.prototype.open = function interceptedOpen(
+      method,
+      url,
+      ...rest
+    ) {
+      return Reflect.apply(nativeXhrOpen, this, [
+        method,
+        rewriteRequestUrl(url),
+        ...rest
+      ]);
+    };
+  }
 
   const provider = Object.freeze({
     getCurrentPosition,

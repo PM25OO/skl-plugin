@@ -6,6 +6,10 @@
     summary: document.querySelector("#summary"),
     locations: document.querySelector("#locations"),
     form: document.querySelector("#location-form"),
+    codeEnabled: document.querySelector("#code-enabled"),
+    codeForm: document.querySelector("#code-form"),
+    codeOverride: document.querySelector("#code-override"),
+    configImport: document.querySelector("#config-import"),
     message: document.querySelector("#message")
   };
   let state = SklConfig.normalizeState(null);
@@ -35,6 +39,10 @@
     elements.summary.textContent = active
       ? `${state.enabled ? "已启用" : "未启用"} · ${active.name} · ${active.latitude.toFixed(6)}, ${active.longitude.toFixed(6)}`
       : "尚未登记坐标";
+    elements.codeEnabled.checked = state.codeOverrideEnabled;
+    if (document.activeElement !== elements.codeOverride) {
+      elements.codeOverride.value = state.codeOverride;
+    }
     elements.locations.replaceChildren();
 
     if (state.locations.length === 0) {
@@ -99,6 +107,47 @@
     void save({ ...state, enabled: elements.enabled.checked }, "设置已保存");
   });
 
+  elements.codeEnabled.addEventListener("change", () => {
+    if (!elements.codeEnabled.checked) {
+      void save({ ...state, codeOverrideEnabled: false }, "签到码改写已关闭");
+      return;
+    }
+
+    if (!/^\d{4}$/.test(elements.codeOverride.value.trim())) {
+      elements.codeEnabled.checked = false;
+      showMessage("启用前请先填写 4 位数字签到码", true);
+      return;
+    }
+
+    void save(
+      {
+        ...state,
+        codeOverride: elements.codeOverride.value.trim(),
+        codeOverrideEnabled: true
+      },
+      "签到码改写已启用"
+    );
+  });
+
+  elements.codeForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const codeOverride = elements.codeOverride.value.trim();
+    if (!/^\d{4}$/.test(codeOverride)) {
+      showMessage("签到码必须是 4 位数字", true);
+      return;
+    }
+    void save(
+      {
+        ...state,
+        codeOverride,
+        codeOverrideEnabled: elements.codeEnabled.checked
+      },
+      elements.codeEnabled.checked
+        ? "签到码已保存并启用改写"
+        : "签到码已保存"
+    );
+  });
+
   elements.form.addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = new FormData(elements.form);
@@ -126,6 +175,36 @@
     );
     elements.form.reset();
     document.querySelector("#accuracy").value = "20";
+  });
+
+  elements.configImport.addEventListener("change", async () => {
+    const [file] = elements.configImport.files;
+    elements.configImport.value = "";
+    if (!file) {
+      return;
+    }
+
+    try {
+      const importedValue = JSON.parse(await file.text());
+      if (
+        importedValue?.schemaVersion !== 1 ||
+        !Array.isArray(importedValue.locations)
+      ) {
+        throw new Error("不是受支持的 SKL 配置文件");
+      }
+      const importedState = SklConfig.normalizeState({
+        ...state,
+        ...importedValue,
+        codeOverride: state.codeOverride,
+        codeOverrideEnabled: state.codeOverrideEnabled
+      });
+      if (importedState.locations.length !== importedValue.locations.length) {
+        throw new Error("配置中存在无效的位置记录");
+      }
+      await save(importedState, `已导入 ${importedState.locations.length} 个位置`);
+    } catch (error) {
+      showMessage(`导入失败：${error.message}`, true);
+    }
   });
 
   async function start() {
