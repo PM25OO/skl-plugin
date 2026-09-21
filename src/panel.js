@@ -9,8 +9,9 @@
   let summary = null;
   let toggleButton = null;
   let collapsed = false;
-  let position = null;
+  let position = { right: 16, y: 16 };
   let dragging = null;
+  let visible = false;
 
   function isMatchingPage() {
     return window.location.hash.startsWith("#/sign/in");
@@ -39,8 +40,8 @@
     const width = panel?.offsetWidth || (collapsed ? 240 : 380);
     const height = panel?.offsetHeight || 48;
     return {
-      x: Math.min(
-        Math.max(POSITION_MARGIN, Number(value?.x) || POSITION_MARGIN),
+      right: Math.min(
+        Math.max(POSITION_MARGIN, Number(value?.right) || POSITION_MARGIN),
         Math.max(POSITION_MARGIN, window.innerWidth - width - POSITION_MARGIN)
       ),
       y: Math.min(
@@ -52,8 +53,13 @@
 
   function applyPosition(nextPosition = position) {
     position = clampPosition(nextPosition);
-    panel.style.left = `${position.x}px`;
+    panel.style.left = "auto";
+    panel.style.right = `${position.right}px`;
     panel.style.top = `${position.y}px`;
+  }
+
+  function resetToTopRight() {
+    applyPosition({ right: 16, y: 16 });
   }
 
   function setCollapsed(value, persist = true) {
@@ -64,7 +70,6 @@
       "aria-label",
       collapsed ? "展开 SKL 配置窗口" : "收缩 SKL 配置窗口"
     );
-    window.requestAnimationFrame(() => applyPosition());
     if (persist) {
       void chrome.storage.local.set({ panelCollapsed: collapsed });
     }
@@ -72,7 +77,12 @@
 
   function updateVisibility() {
     if (host) {
-      host.style.display = isMatchingPage() ? "block" : "none";
+      const shouldShow = isMatchingPage();
+      host.style.display = shouldShow ? "block" : "none";
+      if (shouldShow && !visible) {
+        window.requestAnimationFrame(resetToTopRight);
+      }
+      visible = shouldShow;
     }
   }
 
@@ -212,7 +222,10 @@
         return;
       }
       applyPosition({
-        x: event.clientX - dragging.offsetX,
+        right:
+          window.innerWidth -
+          (event.clientX - dragging.offsetX) -
+          panel.offsetWidth,
         y: event.clientY - dragging.offsetY
       });
     });
@@ -221,7 +234,6 @@
         return;
       }
       dragging = null;
-      void chrome.storage.local.set({ panelPosition: position });
     };
     bar.addEventListener("pointerup", finishDragging);
     bar.addEventListener("pointercancel", finishDragging);
@@ -232,16 +244,11 @@
 
   async function mount() {
     createPanelElements();
-    const stored = await chrome.storage.local.get([
-      "panelCollapsed",
-      "panelPosition"
-    ]);
+    const stored = await chrome.storage.local.get(["panelCollapsed"]);
+    await chrome.storage.local.remove("panelPosition");
     collapsed = Boolean(stored.panelCollapsed);
-    position = stored.panelPosition ?? {
-      x: window.innerWidth - 396,
-      y: 72
-    };
     setCollapsed(collapsed, false);
+    resetToTopRight();
     renderSummary();
     updateVisibility();
   }
