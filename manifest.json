@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SKL 坐标助手",
   "description": "为 SKL 签到页管理预登记坐标，并按需改写签到码。",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "permissions": [
     "storage",
     "downloads"
@@ -45,6 +45,7 @@
       "js": [
         "src/shared.js",
         "src/content.js",
+        "src/sign-page.js",
         "src/panel.js"
       ],
       "css": [

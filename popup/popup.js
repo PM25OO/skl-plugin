@@ -35,54 +35,9 @@
     elements.message.classList.toggle("error", isError);
   }
 
-  function requestEmbeddedSign(code) {
-    return new Promise((resolve, reject) => {
-      const requestId = crypto.randomUUID?.() ?? `sign-${Date.now()}`;
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener("message", receiveResult);
-        reject(new Error("页面未响应签到请求"));
-      }, 4_000);
-
-      function receiveResult(event) {
-        if (
-          event.source !== window.parent ||
-          event.origin !== "https://skl.hdu.edu.cn" ||
-          event.data?.type !== "skl-plugin:sign-result" ||
-          event.data.requestId !== requestId
-        ) {
-          return;
-        }
-        window.clearTimeout(timeout);
-        window.removeEventListener("message", receiveResult);
-        if (event.data.ok) {
-          resolve(event.data);
-        } else {
-          reject(new Error(event.data.error || "签到触发失败"));
-        }
-      }
-
-      window.addEventListener("message", receiveResult);
-      window.parent.postMessage(
-        {
-          type: "skl-plugin:simulate-sign",
-          requestId,
-          code
-        },
-        "https://skl.hdu.edu.cn"
-      );
-    });
-  }
-
   async function requestPageSign(code) {
-    if (window.parent !== window) {
-      return requestEmbeddedSign(code);
-    }
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      throw new Error("没有可用的签到页面");
-    }
-    const result = await chrome.tabs.sendMessage(tab.id, {
-      type: "skl-plugin:simulate-sign",
+    const result = await chrome.runtime.sendMessage({
+      type: "skl-plugin:request-sign",
       code
     });
     if (!result?.ok) {

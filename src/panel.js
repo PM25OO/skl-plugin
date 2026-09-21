@@ -8,7 +8,6 @@
   let host = null;
   let summary = null;
   let toggleButton = null;
-  let frame = null;
   let collapsed = false;
   let position = { right: 16, y: 16 };
   let dragging = null;
@@ -63,88 +62,13 @@
     applyPosition({ right: 16, y: 16 });
   }
 
-  function delay(milliseconds) {
-    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-  }
-
-  function isVisible(element) {
-    if (!element) {
-      return false;
-    }
-    const style = window.getComputedStyle(element);
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      element.getClientRects().length > 0
-    );
-  }
-
-  async function waitForKeyboard() {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      const keyboard = [...document.querySelectorAll(".van-number-keyboard")].find(
-        isVisible
-      );
-      if (keyboard) {
-        return keyboard;
-      }
-      await delay(50);
-    }
-    throw new Error("未找到原页面数字键盘");
-  }
-
-  function digitKey(keyboard, digit) {
-    return [...keyboard.querySelectorAll("button, .van-key")].find(
-      (element) =>
-        isVisible(element) && element.textContent?.trim() === digit
-    );
-  }
-
-  async function simulatePageSign(code) {
-    if (!isMatchingPage()) {
-      throw new Error("当前不是签到页面");
-    }
-    if (!/^\d{4}$/.test(code)) {
-      throw new Error("签到码必须是 4 位数字");
-    }
-
-    const passwordInput = document.querySelector(
-      ".custom-password-input, .van-password-input"
-    );
-    if (!passwordInput) {
-      throw new Error("未找到原页面签到码输入框");
-    }
-    passwordInput.click();
-    const keyboard = await waitForKeyboard();
-    const deleteKey = keyboard.querySelector(
-      ".van-number-keyboard__delete, .van-key--delete, [aria-label*='删除']"
-    );
-
-    if (deleteKey && isVisible(deleteKey)) {
-      for (let index = 0; index < 4; index += 1) {
-        deleteKey.click();
-        await delay(35);
-      }
-    }
-
-    for (const digit of code) {
-      const key = digitKey(keyboard, digit);
-      if (!key) {
-        throw new Error(`未找到数字键 ${digit}`);
-      }
-      key.click();
-      await delay(70);
-    }
-
-    setCollapsed(true);
-    return {
-      ok: true,
-      message: "已输入签到码并触发原页面签到流程"
-    };
-  }
-
   async function respondToSignRequest(message) {
     try {
-      return await simulatePageSign(String(message?.code ?? ""));
+      const result = await SklSignPage.simulatePageSign(
+        String(message?.code ?? "")
+      );
+      setCollapsed(true);
+      return result;
     } catch (error) {
       return {
         ok: false,
@@ -288,7 +212,7 @@
     });
     bar.append(brand, summary, toggleButton);
 
-    frame = document.createElement("iframe");
+    const frame = document.createElement("iframe");
     frame.className = "frame";
     frame.title = "SKL 坐标助手配置";
     frame.src = chrome.runtime.getURL("popup/popup.html?embedded=1");
@@ -347,26 +271,6 @@
   document.addEventListener(CONFIG_EVENT, (event) => {
     configuration = event.detail;
     renderSummary();
-  });
-  window.addEventListener("message", (event) => {
-    if (
-      !frame ||
-      event.source !== frame.contentWindow ||
-      event.origin !== new URL(chrome.runtime.getURL("/")).origin ||
-      event.data?.type !== "skl-plugin:simulate-sign"
-    ) {
-      return;
-    }
-    void respondToSignRequest(event.data).then((result) => {
-      event.source.postMessage(
-        {
-          type: "skl-plugin:sign-result",
-          requestId: event.data.requestId,
-          ...result
-        },
-        event.origin
-      );
-    });
   });
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "skl-plugin:simulate-sign") {
