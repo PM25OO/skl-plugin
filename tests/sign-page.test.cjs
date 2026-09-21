@@ -88,3 +88,89 @@ test("activates the Vant keyboard, clears it, and clicks four digits", async () 
     "3"
   ]);
 });
+
+test("reacquires the keyboard after every reactive DOM update", async () => {
+  const actions = [];
+  let generation = 0;
+
+  function createKeyboard() {
+    generation += 1;
+    const currentGeneration = generation;
+    const keys = [..."0123456789"].map((digit) =>
+      visibleElement({
+        textContent: digit,
+        click() {
+          actions.push(digit);
+          generation += 1;
+        },
+        getClientRects() {
+          return currentGeneration === generation ? [{}] : [];
+        }
+      })
+    );
+    const deleteKey = visibleElement({
+      click() {
+        actions.push("delete");
+        generation += 1;
+      },
+      getClientRects() {
+        return currentGeneration === generation ? [{}] : [];
+      }
+    });
+    return visibleElement({
+      querySelector() {
+        return deleteKey;
+      },
+      querySelectorAll() {
+        return keys;
+      },
+      getClientRects() {
+        return currentGeneration === generation ? [{}] : [];
+      }
+    });
+  }
+
+  let keyboard = createKeyboard();
+  const documentObject = {
+    querySelector() {
+      return visibleElement();
+    },
+    querySelectorAll() {
+      if (keyboard.getClientRects().length === 0) {
+        keyboard = createKeyboard();
+      }
+      return [keyboard];
+    }
+  };
+  class TestEvent {
+    constructor(type) {
+      this.type = type;
+    }
+  }
+  const windowObject = {
+    location: { hash: "#/sign/in" },
+    Event: TestEvent,
+    PointerEvent: TestEvent,
+    getComputedStyle() {
+      return { display: "block", visibility: "visible" };
+    },
+    setTimeout(callback) {
+      callback();
+      return 1;
+    }
+  };
+
+  const result = await simulatePageSign("9876", documentObject, windowObject);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(actions, [
+    "delete",
+    "delete",
+    "delete",
+    "delete",
+    "9",
+    "8",
+    "7",
+    "6"
+  ]);
+});

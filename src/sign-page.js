@@ -76,18 +76,19 @@
     );
     passwordInput.click();
 
-    const keyboard = await waitForKeyboard(documentObject, windowObject);
-    const deleteKey = keyboard.querySelector(
-      ".van-number-keyboard__delete, .van-key--delete, [aria-label*='删除']"
-    );
-    if (deleteKey && isVisible(windowObject, deleteKey)) {
-      for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 4; index += 1) {
+      const keyboard = await waitForKeyboard(documentObject, windowObject);
+      const deleteKey = keyboard.querySelector(
+        ".van-number-keyboard__delete, .van-key--delete, [aria-label*='删除']"
+      );
+      if (deleteKey && isVisible(windowObject, deleteKey)) {
         deleteKey.click();
         await delay(windowObject, 35);
       }
     }
 
     for (const digit of code) {
+      const keyboard = await waitForKeyboard(documentObject, windowObject);
       const key = digitKey(windowObject, keyboard, digit);
       if (!key) {
         throw new Error(`未找到数字键 ${digit}`);
