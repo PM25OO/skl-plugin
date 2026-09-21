@@ -13,6 +13,7 @@
     codeEnabled: document.querySelector("#code-enabled"),
     codeForm: document.querySelector("#code-form"),
     codeOverride: document.querySelector("#code-override"),
+    signNow: document.querySelector("#sign-now"),
     configImport: document.querySelector("#config-import"),
     message: document.querySelector("#message")
   };
@@ -32,6 +33,62 @@
   function showMessage(text, isError = false) {
     elements.message.textContent = text;
     elements.message.classList.toggle("error", isError);
+  }
+
+  function requestEmbeddedSign(code) {
+    return new Promise((resolve, reject) => {
+      const requestId = crypto.randomUUID?.() ?? `sign-${Date.now()}`;
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("message", receiveResult);
+        reject(new Error("页面未响应签到请求"));
+      }, 4_000);
+
+      function receiveResult(event) {
+        if (
+          event.source !== window.parent ||
+          event.origin !== "https://skl.hdu.edu.cn" ||
+          event.data?.type !== "skl-plugin:sign-result" ||
+          event.data.requestId !== requestId
+        ) {
+          return;
+        }
+        window.clearTimeout(timeout);
+        window.removeEventListener("message", receiveResult);
+        if (event.data.ok) {
+          resolve(event.data);
+        } else {
+          reject(new Error(event.data.error || "签到触发失败"));
+        }
+      }
+
+      window.addEventListener("message", receiveResult);
+      window.parent.postMessage(
+        {
+          type: "skl-plugin:simulate-sign",
+          requestId,
+          code
+        },
+        "https://skl.hdu.edu.cn"
+      );
+    });
+  }
+
+  async function requestPageSign(code) {
+    if (window.parent !== window) {
+      return requestEmbeddedSign(code);
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      throw new Error("没有可用的签到页面");
+    }
+    const result = await chrome.tabs.sendMessage(tab.id, {
+      type: "skl-plugin:simulate-sign",
+      code
+    });
+    if (!result?.ok) {
+      throw new Error(result?.error || "签到触发失败");
+    }
+    return result;
   }
 
   function render() {
@@ -150,6 +207,25 @@
         ? "签到码已保存并启用改写"
         : "签到码已保存"
     );
+  });
+
+  elements.signNow.addEventListener("click", async () => {
+    const code = elements.codeOverride.value.trim();
+    if (!/^\d{4}$/.test(code)) {
+      showMessage("请先填写 4 位数字签到码", true);
+      return;
+    }
+
+    elements.signNow.disabled = true;
+    try {
+      await save({ ...state, codeOverride: code }, "签到码已保存");
+      const result = await requestPageSign(code);
+      showMessage(result.message || "已触发原页面签到流程");
+    } catch (error) {
+      showMessage(`无法签到：${error.message}`, true);
+    } finally {
+      elements.signNow.disabled = false;
+    }
   });
 
   elements.form.addEventListener("submit", (event) => {

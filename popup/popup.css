@@ -159,6 +159,29 @@ h2 {
   width: 70px;
 }
 
+.sign-now {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #246d45, #339660);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 750;
+  box-shadow: 0 5px 14px rgb(40 118 75 / 20%);
+}
+
+.sign-now:hover {
+  filter: brightness(1.04);
+}
+
+.sign-now:disabled {
+  cursor: wait;
+  filter: grayscale(0.35);
+  opacity: 0.65;
+}
+
 .crs {
   padding: 3px 7px;
   border-radius: 999px;
