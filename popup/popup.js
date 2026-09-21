@@ -10,8 +10,6 @@
     summary: document.querySelector("#summary"),
     locations: document.querySelector("#locations"),
     form: document.querySelector("#location-form"),
-    codeEnabled: document.querySelector("#code-enabled"),
-    codeForm: document.querySelector("#code-form"),
     codeOverride: document.querySelector("#code-override"),
     signNow: document.querySelector("#sign-now"),
     configImport: document.querySelector("#config-import"),
@@ -55,7 +53,6 @@
     elements.summary.textContent = active
       ? `${state.enabled ? "已启用" : "未启用"} · ${active.name} · ${active.latitude.toFixed(6)}, ${active.longitude.toFixed(6)}`
       : "尚未登记坐标";
-    elements.codeEnabled.checked = state.codeOverrideEnabled;
     if (document.activeElement !== elements.codeOverride) {
       elements.codeOverride.value = state.codeOverride;
     }
@@ -123,45 +120,28 @@
     void save({ ...state, enabled: elements.enabled.checked }, "设置已保存");
   });
 
-  elements.codeEnabled.addEventListener("change", () => {
-    if (!elements.codeEnabled.checked) {
-      void save({ ...state, codeOverrideEnabled: false }, "签到码改写已关闭");
+  elements.codeOverride.addEventListener("input", () => {
+    const code = elements.codeOverride.value.replace(/\D/g, "").slice(0, 4);
+    if (elements.codeOverride.value !== code) {
+      elements.codeOverride.value = code;
+    }
+    if (/^\d{4}$/.test(code)) {
+      void save(
+        { ...state, codeOverride: code, codeOverrideEnabled: true },
+        "签到码已自动保存并启用改写"
+      );
       return;
     }
-
-    if (!/^\d{4}$/.test(elements.codeOverride.value.trim())) {
-      elements.codeEnabled.checked = false;
-      showMessage("启用前请先填写 4 位数字签到码", true);
-      return;
+    if (state.codeOverride || state.codeOverrideEnabled) {
+      void save(
+        { ...state, codeOverride: "", codeOverrideEnabled: false },
+        code
+          ? "签到码改写已暂停，输入满 4 位后自动启用"
+          : "签到码改写已关闭"
+      );
+    } else {
+      showMessage(code ? "输入满 4 位后自动保存并启用改写" : "");
     }
-
-    void save(
-      {
-        ...state,
-        codeOverride: elements.codeOverride.value.trim(),
-        codeOverrideEnabled: true
-      },
-      "签到码改写已启用"
-    );
-  });
-
-  elements.codeForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const codeOverride = elements.codeOverride.value.trim();
-    if (!/^\d{4}$/.test(codeOverride)) {
-      showMessage("签到码必须是 4 位数字", true);
-      return;
-    }
-    void save(
-      {
-        ...state,
-        codeOverride,
-        codeOverrideEnabled: elements.codeEnabled.checked
-      },
-      elements.codeEnabled.checked
-        ? "签到码已保存并启用改写"
-        : "签到码已保存"
-    );
   });
 
   elements.signNow.addEventListener("click", async () => {
@@ -173,7 +153,10 @@
 
     elements.signNow.disabled = true;
     try {
-      await save({ ...state, codeOverride: code }, "签到码已保存");
+      await save(
+        { ...state, codeOverride: code, codeOverrideEnabled: true },
+        "签到码已保存并启用改写"
+      );
       const result = await requestPageSign(code);
       showMessage(result.message || "已触发原页面签到流程");
     } catch (error) {

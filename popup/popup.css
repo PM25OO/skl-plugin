@@ -120,20 +120,6 @@ h2 {
   outline-offset: 2px;
 }
 
-.switch-small span {
-  width: 36px;
-  height: 22px;
-}
-
-.switch-small span::after {
-  width: 16px;
-  height: 16px;
-}
-
-.switch-small input:checked + span::after {
-  transform: translateX(14px);
-}
-
 .code-section {
   margin-bottom: 18px;
   padding: 12px;
@@ -153,10 +139,6 @@ h2 {
   margin-top: 0;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   letter-spacing: 0.18em;
-}
-
-.code-form button {
-  width: 70px;
 }
 
 .sign-now {
