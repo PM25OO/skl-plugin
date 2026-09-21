@@ -2,175 +2,115 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { simulatePageSign } = require("../src/sign-page.js");
 
-function visibleElement(properties = {}) {
+class TestEventTarget {
+  constructor() {
+    this.listeners = new Map();
+  }
+
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) ?? [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type, listener) {
+    const listeners = this.listeners.get(type) ?? [];
+    this.listeners.set(
+      type,
+      listeners.filter((item) => item !== listener)
+    );
+  }
+
+  dispatchEvent(event) {
+    for (const listener of [...(this.listeners.get(event.type) ?? [])]) {
+      listener(event);
+    }
+  }
+}
+
+class TestCustomEvent {
+  constructor(type, init = {}) {
+    this.type = type;
+    this.detail = init.detail;
+  }
+}
+
+function createWindow() {
   return {
-    textContent: "",
-    click() {},
-    dispatchEvent() {},
-    getClientRects() {
-      return [{}];
-    },
-    ...properties
+    location: { hash: "#/sign/in" },
+    CustomEvent: TestCustomEvent,
+    setTimeout,
+    clearTimeout
   };
 }
 
-test("activates the Vant keyboard, clears it, and clicks four digits", async () => {
-  const actions = [];
-  const keys = [..."0123456789"].map((digit) =>
-    visibleElement({
-      textContent: digit,
-      click() {
-        actions.push(digit);
-      }
-    })
-  );
-  const deleteKey = visibleElement({
-    click() {
-      actions.push("delete");
-    }
-  });
-  const keyboard = visibleElement({
-    querySelector() {
-      return deleteKey;
-    },
-    querySelectorAll() {
-      return keys;
-    }
-  });
-  const passwordInput = visibleElement({
-    dispatchEvent(event) {
-      actions.push(event.type);
-    },
-    click() {
-      actions.push("click");
-    }
-  });
-  const documentObject = {
-    querySelector() {
-      return passwordInput;
-    },
-    querySelectorAll() {
-      return [keyboard];
-    }
-  };
-  class TestEvent {
-    constructor(type) {
-      this.type = type;
-    }
-  }
-  const windowObject = {
-    location: { hash: "#/sign/in" },
-    Event: TestEvent,
-    PointerEvent: TestEvent,
-    getComputedStyle() {
-      return { display: "block", visibility: "visible" };
-    },
-    setTimeout(callback) {
-      callback();
-      return 1;
-    }
-  };
-
-  const result = await simulatePageSign("1203", documentObject, windowObject);
-
-  assert.equal(result.ok, true);
-  assert.deepEqual(actions, [
-    "touchstart",
-    "pointerdown",
-    "click",
-    "delete",
-    "delete",
-    "delete",
-    "delete",
-    "1",
-    "2",
-    "0",
-    "3"
-  ]);
-});
-
-test("reacquires the keyboard after every reactive DOM update", async () => {
-  const actions = [];
-  let generation = 0;
-
-  function createKeyboard() {
-    generation += 1;
-    const currentGeneration = generation;
-    const keys = [..."0123456789"].map((digit) =>
-      visibleElement({
-        textContent: digit,
-        click() {
-          actions.push(digit);
-          generation += 1;
-        },
-        getClientRects() {
-          return currentGeneration === generation ? [{}] : [];
+test("forwards the sign code to the main page and returns verified success", async () => {
+  const documentObject = new TestEventTarget();
+  documentObject.addEventListener("skl-plugin:sign-request", (event) => {
+    documentObject.dispatchEvent(
+      new TestCustomEvent("skl-plugin:sign-result", {
+        detail: {
+          requestId: event.detail.requestId,
+          ok: true,
+          message: "verification triggered"
         }
       })
     );
-    const deleteKey = visibleElement({
-      click() {
-        actions.push("delete");
-        generation += 1;
-      },
-      getClientRects() {
-        return currentGeneration === generation ? [{}] : [];
-      }
-    });
-    return visibleElement({
-      querySelector() {
-        return deleteKey;
-      },
-      querySelectorAll() {
-        return keys;
-      },
-      getClientRects() {
-        return currentGeneration === generation ? [{}] : [];
-      }
-    });
-  }
+  });
 
-  let keyboard = createKeyboard();
-  const documentObject = {
-    querySelector() {
-      return visibleElement();
-    },
-    querySelectorAll() {
-      if (keyboard.getClientRects().length === 0) {
-        keyboard = createKeyboard();
-      }
-      return [keyboard];
-    }
-  };
-  class TestEvent {
-    constructor(type) {
-      this.type = type;
-    }
-  }
-  const windowObject = {
-    location: { hash: "#/sign/in" },
-    Event: TestEvent,
-    PointerEvent: TestEvent,
-    getComputedStyle() {
-      return { display: "block", visibility: "visible" };
-    },
-    setTimeout(callback) {
-      callback();
-      return 1;
-    }
-  };
+  const result = await simulatePageSign(
+    "1203",
+    documentObject,
+    createWindow()
+  );
 
-  const result = await simulatePageSign("9876", documentObject, windowObject);
+  assert.deepEqual(result, { ok: true, message: "verification triggered" });
+});
 
-  assert.equal(result.ok, true);
-  assert.deepEqual(actions, [
-    "delete",
-    "delete",
-    "delete",
-    "delete",
-    "9",
-    "8",
-    "7",
-    "6"
-  ]);
+test("reports the failure returned by the main page", async () => {
+  const documentObject = new TestEventTarget();
+  documentObject.addEventListener("skl-plugin:sign-request", (event) => {
+    documentObject.dispatchEvent(
+      new TestCustomEvent("skl-plugin:sign-result", {
+        detail: {
+          requestId: event.detail.requestId,
+          ok: false,
+          error: "location is not ready"
+        }
+      })
+    );
+  });
+
+  await assert.rejects(
+    simulatePageSign("1357", documentObject, createWindow()),
+    /location is not ready/
+  );
+});
+
+test("ignores a result belonging to another sign request", async () => {
+  const documentObject = new TestEventTarget();
+  documentObject.addEventListener("skl-plugin:sign-request", (event) => {
+    documentObject.dispatchEvent(
+      new TestCustomEvent("skl-plugin:sign-result", {
+        detail: { requestId: "another-request", ok: true }
+      })
+    );
+    documentObject.dispatchEvent(
+      new TestCustomEvent("skl-plugin:sign-result", {
+        detail: {
+          requestId: event.detail.requestId,
+          ok: true,
+          message: "correct response"
+        }
+      })
+    );
+  });
+
+  const result = await simulatePageSign(
+    "9876",
+    documentObject,
+    createWindow()
+  );
+
+  assert.equal(result.message, "correct response");
 });

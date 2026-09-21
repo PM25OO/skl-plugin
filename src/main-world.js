@@ -2,6 +2,8 @@
   "use strict";
 
   const CONFIG_EVENT = "skl-plugin:configuration";
+  const SIGN_REQUEST_EVENT = "skl-plugin:sign-request";
+  const SIGN_RESULT_EVENT = "skl-plugin:sign-result";
   const nativeGeolocation = navigator.geolocation;
   const nativeGetCurrentPosition = nativeGeolocation?.getCurrentPosition?.bind(
     nativeGeolocation
@@ -18,6 +20,117 @@
   let nextSyntheticWatchId = 1_000_000;
   const syntheticWatches = new Map();
   const pendingRequests = new Set();
+
+  function createKeyTouchEvent(type, touch) {
+    const event = new window.Event(type, {
+      bubbles: true,
+      cancelable: true
+    });
+    const activeTouches = type === "touchend" ? [] : [touch];
+    Object.defineProperties(event, {
+      touches: { value: activeTouches },
+      targetTouches: { value: activeTouches },
+      changedTouches: { value: [touch] }
+    });
+    return event;
+  }
+
+  function pressPageKey(key) {
+    const wrapper = key?.closest?.(".van-key__wrapper");
+    if (!wrapper) {
+      throw new Error("原页面数字键结构已变更");
+    }
+    const rect = wrapper.getBoundingClientRect();
+    const touch = {
+      identifier: Date.now(),
+      target: wrapper,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2
+    };
+    wrapper.dispatchEvent(createKeyTouchEvent("touchstart", touch));
+    wrapper.dispatchEvent(createKeyTouchEvent("touchend", touch));
+  }
+
+  function pageKeyboard() {
+    const keyboards = [...document.querySelectorAll(".van-number-keyboard")];
+    const keyboard = keyboards.at(-1);
+    if (!keyboard) {
+      throw new Error("未找到原页面数字键盘组件");
+    }
+    return keyboard;
+  }
+
+  function submitCodeThroughPage(code) {
+    if (!window.location.hash.startsWith("#/sign/in")) {
+      throw new Error("当前不是签到页面");
+    }
+    if (!/^\d{4}$/.test(code)) {
+      throw new Error("签到码必须是 4 位数字");
+    }
+
+    const trigger = document.getElementById("captcha-trigger-btn");
+    if (!trigger) {
+      throw new Error("原页面验证入口尚未准备好");
+    }
+    const keyboard = pageKeyboard();
+    const deleteKey = keyboard.querySelector(".van-key--delete");
+    const digitKeys = [...keyboard.querySelectorAll(".van-key")];
+    if (!deleteKey) {
+      throw new Error("未找到原页面删除键");
+    }
+    let verificationTriggered = false;
+    const markTriggered = () => {
+      verificationTriggered = true;
+    };
+    trigger.addEventListener("click", markTriggered, true);
+    try {
+      for (let index = 0; index < 4; index += 1) {
+        pressPageKey(deleteKey);
+      }
+      for (const digit of code) {
+        const key = digitKeys.find(
+          (candidate) => candidate.textContent?.trim() === digit
+        );
+        if (!key) {
+          throw new Error(`未找到原页面数字键 ${digit}`);
+        }
+        pressPageKey(key);
+      }
+    } finally {
+      trigger.removeEventListener("click", markTriggered, true);
+    }
+
+    if (!verificationTriggered) {
+      throw new Error(
+        "网页未触发签到验证，请确认定位已准备完成"
+      );
+    }
+    return {
+      ok: true,
+      message: "签到码已交给原页面，并已触发验证入口"
+    };
+  }
+
+  document.addEventListener(SIGN_REQUEST_EVENT, (event) => {
+    const requestId = String(event.detail?.requestId ?? "");
+    if (!requestId) {
+      return;
+    }
+    let result;
+    try {
+      result = submitCodeThroughPage(String(event.detail?.code ?? ""));
+    } catch (error) {
+      result = {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+    document.dispatchEvent(
+      new CustomEvent(SIGN_RESULT_EVENT, {
+        detail: { requestId, ...result }
+      })
+    );
+  });
 
   function validConfiguration(value) {
     const location = value?.location;
