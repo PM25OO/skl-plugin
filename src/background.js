@@ -3,9 +3,7 @@ importScripts("shared.js");
 (function initializeConfigurationExport() {
   "use strict";
 
-  const EXPORT_KEYS = new Set(["enabled", "activeLocationId", "locations"]);
-  const EXPORT_FILENAME = "skl-plugin/config.json";
-  let exportTimer = null;
+  const EXPORT_FILENAME = "skl-plugin-config.json";
 
   async function exportConfiguration() {
     const stored = await chrome.storage.local.get();
@@ -25,33 +23,23 @@ importScripts("shared.js");
         lastExportedAt: exportedAt,
         lastExportError: null
       });
+      return { ok: true, filename: EXPORT_FILENAME };
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       await chrome.storage.local.set({
-        lastExportError: error instanceof Error ? error.message : String(error)
+        lastExportError: errorMessage
       });
+      return { ok: false, error: errorMessage };
     }
   }
-
-  function scheduleExport() {
-    if (exportTimer !== null) {
-      clearTimeout(exportTimer);
-    }
-    exportTimer = setTimeout(() => {
-      exportTimer = null;
-      void exportConfiguration();
-    }, 300);
-  }
-
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (
-      areaName === "local" &&
-      Object.keys(changes).some((key) => EXPORT_KEYS.has(key))
-    ) {
-      scheduleExport();
-    }
-  });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === "skl-plugin:export-configuration") {
+      void exportConfiguration().then(sendResponse);
+      return true;
+    }
+
     if (message?.type !== "skl-plugin:request-sign") {
       return false;
     }

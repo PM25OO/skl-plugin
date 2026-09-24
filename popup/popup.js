@@ -9,13 +9,23 @@
     enabled: document.querySelector("#enabled"),
     summary: document.querySelector("#summary"),
     locations: document.querySelector("#locations"),
+    editor: document.querySelector("#location-editor"),
+    editorTitle: document.querySelector("#location-editor-title"),
     form: document.querySelector("#location-form"),
+    name: document.querySelector("#name"),
+    latitude: document.querySelector("#latitude"),
+    longitude: document.querySelector("#longitude"),
+    accuracy: document.querySelector("#accuracy"),
+    saveLocation: document.querySelector("#save-location"),
+    cancelLocationEdit: document.querySelector("#cancel-location-edit"),
     codeOverride: document.querySelector("#code-override"),
     signNow: document.querySelector("#sign-now"),
+    configExport: document.querySelector("#config-export"),
     configImport: document.querySelector("#config-import"),
     message: document.querySelector("#message")
   };
   let state = SklConfig.normalizeState(null);
+  let editingLocationId = null;
 
   function createId() {
     return crypto.randomUUID?.() ?? `location-${Date.now()}`;
@@ -33,6 +43,31 @@
     elements.message.classList.toggle("error", isError);
   }
 
+  function resetLocationEditor(close = false) {
+    editingLocationId = null;
+    elements.form.reset();
+    elements.accuracy.value = "20";
+    elements.editorTitle.textContent = "添加位置";
+    elements.saveLocation.textContent = "保存位置";
+    elements.cancelLocationEdit.hidden = true;
+    if (close) {
+      elements.editor.open = false;
+    }
+  }
+
+  function editLocation(location) {
+    editingLocationId = location.id;
+    elements.name.value = location.name;
+    elements.latitude.value = String(location.latitude);
+    elements.longitude.value = String(location.longitude);
+    elements.accuracy.value = String(location.accuracy);
+    elements.editorTitle.textContent = "编辑位置";
+    elements.saveLocation.textContent = "保存修改";
+    elements.cancelLocationEdit.hidden = false;
+    elements.editor.open = true;
+    elements.name.focus();
+  }
+
   async function requestPageSign(code) {
     const result = await chrome.runtime.sendMessage({
       type: "skl-plugin:request-sign",
@@ -40,6 +75,16 @@
     });
     if (!result?.ok) {
       throw new Error(result?.error || "签到触发失败");
+    }
+    return result;
+  }
+
+  async function exportConfiguration() {
+    const result = await chrome.runtime.sendMessage({
+      type: "skl-plugin:export-configuration"
+    });
+    if (!result?.ok) {
+      throw new Error(result?.error || "配置导出失败");
     }
     return result;
   }
@@ -92,6 +137,16 @@
       text.append(name, coordinates);
       choice.append(radio, text);
 
+      const actions = document.createElement("div");
+      actions.className = "location-actions";
+
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "edit-button";
+      edit.textContent = "编辑";
+      edit.setAttribute("aria-label", `编辑位置 ${location.name}`);
+      edit.addEventListener("click", () => editLocation(location));
+
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "delete-button";
@@ -109,9 +164,13 @@
           { ...state, locations, activeLocationId },
           `已删除 ${location.name}`
         );
+        if (editingLocationId === location.id) {
+          resetLocationEditor(true);
+        }
       });
 
-      card.append(choice, remove);
+      actions.append(edit, remove);
+      card.append(choice, actions);
       elements.locations.append(card);
     }
   }
@@ -166,16 +225,19 @@
     }
   });
 
-  elements.form.addEventListener("submit", (event) => {
+  elements.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(elements.form);
+    const existingLocation = state.locations.find(
+      (candidate) => candidate.id === editingLocationId
+    );
     const location = SklConfig.normalizeLocation({
-      id: createId(),
+      id: existingLocation?.id ?? createId(),
       name: formData.get("name"),
       latitude: formData.get("latitude"),
       longitude: formData.get("longitude"),
       accuracy: formData.get("accuracy"),
-      createdAt: new Date().toISOString()
+      createdAt: existingLocation?.createdAt ?? new Date().toISOString()
     });
 
     if (!location) {
@@ -183,16 +245,37 @@
       return;
     }
 
-    void save(
+    const locations = existingLocation
+      ? state.locations.map((candidate) =>
+          candidate.id === existingLocation.id ? location : candidate
+        )
+      : [...state.locations, location];
+    await save(
       {
         ...state,
-        locations: [...state.locations, location],
+        locations,
         activeLocationId: state.activeLocationId ?? location.id
       },
-      `已保存 ${location.name}`
+      existingLocation ? `已更新 ${location.name}` : `已保存 ${location.name}`
     );
-    elements.form.reset();
-    document.querySelector("#accuracy").value = "20";
+    resetLocationEditor(existingLocation !== undefined);
+  });
+
+  elements.cancelLocationEdit.addEventListener("click", () => {
+    resetLocationEditor(true);
+    showMessage("已取消编辑");
+  });
+
+  elements.configExport.addEventListener("click", async () => {
+    elements.configExport.disabled = true;
+    try {
+      const result = await exportConfiguration();
+      showMessage(`已导出到默认下载位置：${result.filename}`);
+    } catch (error) {
+      showMessage(`导出失败：${error.message}`, true);
+    } finally {
+      elements.configExport.disabled = false;
+    }
   });
 
   elements.configImport.addEventListener("change", async () => {
@@ -220,6 +303,7 @@
         throw new Error("配置中存在无效的位置记录");
       }
       await save(importedState, `已导入 ${importedState.locations.length} 个位置`);
+      resetLocationEditor(true);
     } catch (error) {
       showMessage(`导入失败：${error.message}`, true);
     }

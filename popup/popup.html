@@ -49,8 +49,8 @@
         <div id="locations" class="locations"></div>
       </section>
 
-      <details>
-        <summary>添加位置</summary>
+      <details id="location-editor">
+        <summary id="location-editor-title">添加位置</summary>
         <form id="location-form">
           <label>
             名称
@@ -70,25 +70,33 @@
             精度半径（米）
             <input id="accuracy" name="accuracy" required type="number" min="1" step="1" value="20" />
           </label>
-          <button type="submit">保存位置</button>
+          <div class="form-actions">
+            <button id="save-location" type="submit">保存位置</button>
+            <button id="cancel-location-edit" class="secondary-button" type="button" hidden>
+              取消编辑
+            </button>
+          </div>
         </form>
       </details>
 
       <section class="config-section" aria-labelledby="config-title">
         <div class="section-heading">
           <h2 id="config-title">配置文件</h2>
-          <label class="import-button">
-            导入
-            <input id="config-import" type="file" accept="application/json,.json" />
-          </label>
+          <div class="config-actions">
+            <button id="config-export" class="config-button" type="button">导出</button>
+            <label class="config-button">
+              导入
+              <input id="config-import" type="file" accept="application/json,.json" />
+            </label>
+          </div>
         </div>
         <p class="hint">
-          位置变更后自动覆盖导出到 <code>Downloads/skl-plugin/config.json</code>。
+          配置仅在点击“导出”后保存到浏览器的默认下载位置。
         </p>
       </section>
 
       <p id="message" class="message" role="status" aria-live="polite"></p>
-      <footer>更改后刷新签到页面，确保页面重新读取位置。</footer>
+      <footer>切换位置后立即更新页面显示与后续签到请求，无需刷新。</footer>
     </main>
     <script src="../src/shared.js"></script>
     <script src="popup.js"></script>

@@ -33,7 +33,10 @@ main {
 header,
 .section-heading,
 .location-card,
-.coordinate-row {
+.coordinate-row,
+.location-actions,
+.config-actions,
+.form-actions {
   display: flex;
   align-items: center;
 }
@@ -233,12 +236,25 @@ h2 {
   font-size: 10px;
 }
 
+.location-actions {
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.edit-button,
 .delete-button {
   border: 0;
   background: transparent;
-  color: #9c4d48;
   cursor: pointer;
   font-size: 12px;
+}
+
+.edit-button {
+  color: #28764b;
+}
+
+.delete-button {
+  color: #9c4d48;
 }
 
 details {
@@ -263,7 +279,12 @@ details {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
-.import-button {
+.config-actions {
+  gap: 6px;
+}
+
+.config-button,
+.secondary-button {
   padding: 5px 9px;
   border: 1px solid #b9cbbd;
   border-radius: 7px;
@@ -274,7 +295,12 @@ details {
   font-weight: 600;
 }
 
-.import-button input {
+.config-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.config-button input {
   display: none;
 }
 
@@ -327,6 +353,19 @@ button[type="submit"] {
   color: #fff;
   cursor: pointer;
   font-weight: 700;
+}
+
+.form-actions {
+  gap: 8px;
+}
+
+.form-actions button {
+  flex: 1;
+}
+
+.secondary-button {
+  padding: 10px;
+  background: #fff;
 }
 
 .message {
