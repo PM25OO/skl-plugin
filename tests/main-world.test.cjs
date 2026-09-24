@@ -63,7 +63,7 @@ function createTestKey(textContent, press) {
   };
 }
 
-function createContext() {
+function createContext(nativePosition = null) {
   class TestXhr {
     open(method, url) {
       this.method = method;
@@ -77,6 +77,7 @@ function createContext() {
   const requests = [];
   const window = {
     location: new URL("https://skl.hdu.edu.cn/#/sign/in"),
+    addEventListener() {},
     Event: TestDomEvent,
     XMLHttpRequest: TestXhr,
     fetch(input) {
@@ -90,7 +91,11 @@ function createContext() {
   };
   const navigator = {
     geolocation: {
-      getCurrentPosition() {},
+      getCurrentPosition(success) {
+        if (nativePosition) {
+          setTimeout(() => success(nativePosition), 0);
+        }
+      },
       watchPosition() {
         return 1;
       },
@@ -133,7 +138,7 @@ function createContext() {
     }
   });
 
-  return { window, document, requests, TestXhr };
+  return { window, document, navigator, requests, TestXhr };
 }
 
 test("rewrites the code query field on the sign endpoint", () => {
@@ -165,6 +170,207 @@ test("rewrites fetch URLs on the sign endpoint", async () => {
   );
 
   assert.equal(new URL(requests[0]).searchParams.get("code"), "1234");
+});
+
+test("uses the newly selected location in later sign requests without reload", () => {
+  const { document, TestXhr } = createContext();
+  const signUrl =
+    "https://skl.hdu.edu.cn/api/ali-nvc/captcha-verify?code=0000&latitude=30.1&longitude=120.1";
+
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: true,
+      location: {
+        name: "Room A",
+        latitude: 30.1234567,
+        longitude: 120.7654321,
+        accuracy: 20
+      },
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  const first = new TestXhr();
+  first.open("POST", signUrl);
+  assert.equal(new URL(first.url).searchParams.get("latitude"), "30.1234567");
+  assert.equal(new URL(first.url).searchParams.get("longitude"), "120.7654321");
+  assert.equal(new URL(first.url).searchParams.get("code"), "0000");
+
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: true,
+      location: {
+        name: "Room B",
+        latitude: 30.2222222,
+        longitude: 120.3333333,
+        accuracy: 10
+      },
+      codeOverrideEnabled: true,
+      codeOverride: "9876"
+    }
+  });
+  const second = new TestXhr();
+  second.open("POST", signUrl);
+  assert.equal(new URL(second.url).searchParams.get("latitude"), "30.2222222");
+  assert.equal(new URL(second.url).searchParams.get("longitude"), "120.3333333");
+  assert.equal(new URL(second.url).searchParams.get("code"), "9876");
+
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: false,
+      location: null,
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  const disabled = new TestXhr();
+  disabled.open("POST", signUrl);
+  assert.equal(disabled.url, signUrl);
+});
+
+test("does not rewrite coordinates on unrelated endpoints", () => {
+  const { document, TestXhr } = createContext();
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: true,
+      location: {
+        name: "Room A",
+        latitude: 30.2,
+        longitude: 120.3,
+        accuracy: 20
+      },
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  const url =
+    "https://skl.hdu.edu.cn/api/checkIn/valid-code?latitude=1&longitude=2";
+  const request = new TestXhr();
+  request.open("GET", url);
+
+  assert.equal(request.url, url);
+});
+
+test("rewrites fetch coordinates on the sign endpoint", async () => {
+  const { document, window, requests } = createContext();
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: true,
+      location: {
+        name: "Room A",
+        latitude: 30.2,
+        longitude: 120.3,
+        accuracy: 20
+      },
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  await window.fetch(
+    "https://skl.hdu.edu.cn/api/ali-nvc/captcha-verify?latitude=1&longitude=2"
+  );
+
+  assert.equal(new URL(requests[0]).searchParams.get("latitude"), "30.2");
+  assert.equal(new URL(requests[0]).searchParams.get("longitude"), "120.3");
+});
+
+test("refreshes the sign page geolocation callback when a profile changes", async () => {
+  const { document, navigator } = createContext();
+  const received = [];
+  navigator.geolocation.getCurrentPosition((position) => {
+    received.push([
+      position.coords.latitude,
+      position.coords.longitude
+    ]);
+  });
+
+  const firstLocation = {
+    name: "Room A",
+    latitude: 30.1,
+    longitude: 120.2,
+    accuracy: 20
+  };
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: true,
+      location: firstLocation,
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(received, [[30.1, 120.2]]);
+
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: true,
+      location: {
+        name: "Room B",
+        latitude: 30.3,
+        longitude: 120.4,
+        accuracy: 20
+      },
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(received, [[30.1, 120.2], [30.3, 120.4]]);
+});
+
+test("returns to native geolocation after the location override is disabled", async () => {
+  const nativePosition = {
+    coords: { latitude: 31.5, longitude: 121.5 }
+  };
+  const { document, navigator } = createContext(nativePosition);
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: true,
+      location: {
+        name: "Room A",
+        latitude: 30.1,
+        longitude: 120.2,
+        accuracy: 20
+      },
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  const received = [];
+  navigator.geolocation.getCurrentPosition((position) => {
+    received.push([position.coords.latitude, position.coords.longitude]);
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(received, [[30.1, 120.2]]);
+
+  document.dispatchEvent({
+    type: "skl-plugin:configuration",
+    detail: {
+      schemaVersion: 1,
+      enabled: false,
+      location: null,
+      codeOverrideEnabled: false,
+      codeOverride: null
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(received, [[30.1, 120.2], [31.5, 121.5]]);
 });
 
 test("uses the page NumberKeyboard touch sequence and verifies the captcha trigger", () => {

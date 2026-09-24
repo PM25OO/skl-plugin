@@ -20,6 +20,12 @@
   let nextSyntheticWatchId = 1_000_000;
   const syntheticWatches = new Map();
   const pendingRequests = new Set();
+  let signPositionRequest = null;
+  let signPositionGeneration = 0;
+
+  function isSignPage() {
+    return window.location.hash.startsWith("#/sign/in");
+  }
 
   function createKeyTouchEvent(type, touch) {
     const event = new window.Event(type, {
@@ -61,7 +67,7 @@
   }
 
   function submitCodeThroughPage(code) {
-    if (!window.location.hash.startsWith("#/sign/in")) {
+    if (!isSignPage()) {
       throw new Error("当前不是签到页面");
     }
     if (!/^\d{4}$/.test(code)) {
@@ -158,7 +164,9 @@
   }
 
   function rewriteRequestUrl(value) {
-    if (!validCodeConfiguration(configuration)) {
+    const rewriteCode = validCodeConfiguration(configuration);
+    const rewriteLocation = validConfiguration(configuration);
+    if (!rewriteCode && !rewriteLocation) {
       return value;
     }
 
@@ -166,12 +174,33 @@
       const url = new URL(String(value), window.location.href);
       if (
         url.origin !== window.location.origin ||
-        url.pathname !== SIGN_ENDPOINT ||
-        !url.searchParams.has("code")
+        url.pathname !== SIGN_ENDPOINT
       ) {
         return value;
       }
-      url.searchParams.set("code", configuration.codeOverride);
+      let changed = false;
+      if (rewriteCode && url.searchParams.has("code")) {
+        url.searchParams.set("code", configuration.codeOverride);
+        changed = true;
+      }
+      if (
+        rewriteLocation &&
+        url.searchParams.has("latitude") &&
+        url.searchParams.has("longitude")
+      ) {
+        url.searchParams.set(
+          "latitude",
+          String(configuration.location.latitude)
+        );
+        url.searchParams.set(
+          "longitude",
+          String(configuration.location.longitude)
+        );
+        changed = true;
+      }
+      if (!changed) {
+        return value;
+      }
       return url.href;
     } catch {
       return value;
@@ -215,6 +244,11 @@
   function getCurrentPosition(success, error, options) {
     if (typeof success !== "function") {
       throw new TypeError("The success callback must be a function");
+    }
+    if (isSignPage()) {
+      // The sign page reads geolocation once and stores it in Vue refs.
+      // Keep only that page's callback so profile switches refresh its refs.
+      signPositionRequest = { success, error, options };
     }
 
     if (configuration !== null) {
@@ -273,9 +307,63 @@
     pendingRequests.clear();
   }
 
+  function positionKey(value) {
+    if (!validConfiguration(value)) {
+      return null;
+    }
+    const { latitude, longitude, accuracy } = value.location;
+    return `${latitude}|${longitude}|${accuracy}`;
+  }
+
+  function refreshSignPagePosition() {
+    const request = signPositionRequest;
+    if (!request || !isSignPage()) {
+      return;
+    }
+    const generation = ++signPositionGeneration;
+    const stillCurrent = () =>
+      generation === signPositionGeneration &&
+      signPositionRequest === request &&
+      isSignPage();
+    if (validConfiguration(configuration)) {
+      window.setTimeout(() => {
+        if (stillCurrent()) {
+          request.success(syntheticPosition());
+        }
+      }, 0);
+    } else {
+      useNativeGet(
+        (position) => {
+          if (stillCurrent()) {
+            request.success(position);
+          }
+        },
+        (error) => {
+          if (stillCurrent()) {
+            request.error?.(error);
+          }
+        },
+        request.options
+      );
+    }
+  }
+
   document.addEventListener(CONFIG_EVENT, (event) => {
+    const previousConfiguration = configuration;
     configuration = event.detail ?? { enabled: false };
     flushPendingRequests();
+    if (
+      previousConfiguration !== null &&
+      positionKey(previousConfiguration) !== positionKey(configuration)
+    ) {
+      refreshSignPagePosition();
+    }
+  });
+  window.addEventListener("hashchange", () => {
+    if (!isSignPage()) {
+      signPositionRequest = null;
+      signPositionGeneration += 1;
+    }
   });
 
   if (nativeFetch) {

@@ -1,7 +1,23 @@
+.skl-plugin-native-location-hidden {
+  display: none !important;
+}
+
+.skl-plugin-created-location {
+  display: flex;
+  align-items: center;
+}
+
+.skl-plugin-current-location {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2em;
+}
+
 .skl-plugin-location-name {
   display: inline-flex;
   align-items: center;
-  margin-inline-start: 0.4em;
+  margin-inline-start: 0.2em;
   padding: 0.15em 0.55em;
   border: 1px solid rgb(57 153 98 / 28%);
   border-radius: 999px;

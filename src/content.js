@@ -12,53 +12,77 @@
   ];
   let currentConfiguration = null;
   let decorationScheduled = false;
+  let publicationSequence = 0;
 
-  function updateLocationLabels() {
+  function updateLocationDisplay() {
     decorationScheduled = false;
-    const name =
-      currentConfiguration?.enabled && currentConfiguration.location?.name
-        ? currentConfiguration.location.name
-        : null;
-    const existingBadges = document.querySelectorAll(
-      ".skl-plugin-location-name"
-    );
-
-    if (!name) {
-      for (const badge of existingBadges) {
-        badge.remove();
+    const location = currentConfiguration?.enabled
+      ? currentConfiguration.location
+      : null;
+    if (!location) {
+      for (const element of document.querySelectorAll(
+        ".skl-plugin-created-location, .skl-plugin-current-location, .skl-plugin-location-name"
+      )) {
+        element.remove();
+      }
+      for (const element of document.querySelectorAll(
+        ".skl-plugin-native-location-hidden"
+      )) {
+        element.classList.remove("skl-plugin-native-location-hidden");
       }
       return;
     }
 
-    for (const badge of existingBadges) {
-      const label = `· ${name}`;
-      if (badge.textContent !== label) {
-        badge.textContent = label;
+    for (const container of document.querySelectorAll(
+      ".sign-page .sign-tips"
+    )) {
+      const nativeItem = [...container.querySelectorAll(
+        ":scope > .tip-item.location"
+      )].find(
+        (item) => !item.classList.contains("skl-plugin-created-location")
+      );
+      let createdItem = container.querySelector(
+        ":scope > .skl-plugin-created-location"
+      );
+      if (nativeItem && createdItem) {
+        createdItem.remove();
+        createdItem = null;
       }
-    }
-    if (existingBadges.length > 0) {
-      return;
-    }
-
-    const walker = document.createTreeWalker(document, NodeFilter.SHOW_TEXT);
-    const targets = [];
-    while (walker.nextNode()) {
-      const node = walker.currentNode;
-      const parent = node.parentElement;
-      if (
-        /^当前位置[：:]?$/.test(node.nodeValue?.trim() ?? "") &&
-        parent &&
-        !parent.querySelector(":scope > .skl-plugin-location-name")
-      ) {
-        targets.push(parent);
+      if (!nativeItem && !createdItem) {
+        createdItem = document.createElement("div");
+        createdItem.className = "tip-item location skl-plugin-created-location";
+        container.append(createdItem);
       }
-    }
-
-    for (const target of targets) {
-      const badge = document.createElement("span");
-      badge.className = "skl-plugin-location-name";
-      badge.textContent = `· ${name}`;
-      target.append(badge);
+      const item = nativeItem ?? createdItem;
+      const nativeText = nativeItem?.querySelector(
+        ":scope > span:not(.skl-plugin-current-location)"
+      );
+      nativeText?.classList.add("skl-plugin-native-location-hidden");
+      let display = item.querySelector(":scope > .skl-plugin-current-location");
+      if (!display) {
+        display = nativeText?.cloneNode(false) ?? document.createElement("span");
+        display.classList.remove("skl-plugin-native-location-hidden");
+        display.classList.add("skl-plugin-current-location");
+        item.append(display);
+      }
+      const coordinates = `当前位置: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+      if (display.firstChild?.nodeType === Node.TEXT_NODE) {
+        if (display.firstChild.nodeValue !== coordinates) {
+          display.firstChild.nodeValue = coordinates;
+        }
+      } else {
+        display.prepend(document.createTextNode(coordinates));
+      }
+      let badge = display.querySelector(":scope > .skl-plugin-location-name");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "skl-plugin-location-name";
+        display.append(badge);
+      }
+      const nameLabel = `· ${location.name}`;
+      if (badge.textContent !== nameLabel) {
+        badge.textContent = nameLabel;
+      }
     }
   }
 
@@ -67,11 +91,15 @@
       return;
     }
     decorationScheduled = true;
-    window.requestAnimationFrame(updateLocationLabels);
+    window.requestAnimationFrame(updateLocationDisplay);
   }
 
   async function publishConfiguration() {
+    const sequence = ++publicationSequence;
     const stored = await chrome.storage.local.get(STORAGE_KEYS);
+    if (sequence !== publicationSequence) {
+      return;
+    }
     const configuration = SklConfig.activeConfiguration(stored);
     currentConfiguration = configuration;
     document.dispatchEvent(
